@@ -1,10 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Import this for setting orientation
+import 'package:flutter/services.dart';
 import 'package:flutter_joystick/flutter_joystick.dart';
 
 void main() {
-  // Lock the orientation to landscape mode
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.landscapeRight,
@@ -18,10 +17,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: Scaffold(
-        appBar: AppBar(title: Text('AI FAN Controller')),
-        body: Center(child: ControllerView()),
-      ),
+      home: ControllerView(),
     );
   }
 }
@@ -33,45 +29,105 @@ class ControllerView extends StatefulWidget {
 
 class _ControllerViewState extends State<ControllerView> {
   double rotationAngle = 0.0;
+  bool isAutoMode = false;
 
   void onJoystickMove(Offset offset) {
     setState(() {
-      // Adjust calculations based on the actual joystick input logic
       rotationAngle =
           offset.direction * 180 / 3.1416; // Convert radians to degrees
     });
   }
 
+  void toggleAutoMode() {
+    setState(() {
+      isAutoMode = !isAutoMode;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Check if the screen is in landscape mode
-        bool isLandscape = constraints.maxWidth > constraints.maxHeight;
+    return Stack(
+      children: [
+        // Scaffold with the main content
+        Scaffold(
+          appBar: AppBar(title: Text('AI FAN Controller')),
+          body: LayoutBuilder(
+            builder: (context, constraints) {
+              bool isLandscape = constraints.maxWidth > constraints.maxHeight;
+              return isLandscape
+                  ? Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            DirectionalController(),
+                            RotationJoystick(
+                              rotationAngle: rotationAngle,
+                              onMove: onJoystickMove,
+                            ),
+                          ],
+                        ),
+                        AutoModeButton(
+                          isAutoMode: isAutoMode,
+                          onPressed: toggleAutoMode,
+                        ),
+                      ],
+                    )
+                  : Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        DirectionalController(),
+                        SizedBox(height: 100),
+                        RotationJoystick(
+                          rotationAngle: rotationAngle,
+                          onMove: onJoystickMove,
+                        ),
+                        AutoModeButton(
+                          isAutoMode: isAutoMode,
+                          onPressed: toggleAutoMode,
+                        ),
+                      ],
+                    );
+            },
+          ),
+        ),
+        // Full-screen overlay when isAutoMode is true
+        if (isAutoMode)
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: toggleAutoMode,
+              child: Container(
+                color: Colors.grey.withOpacity(0.7),
+                child: Center(
+                  child: Text(
+                    '자율주행 실행 중입니다.',
+                    style: TextStyle(
+                      fontSize: 24,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
 
-        return isLandscape
-            ? Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  DirectionalController(),
-                  RotationJoystick(
-                    rotationAngle: rotationAngle,
-                    onMove: onJoystickMove,
-                  ),
-                ],
-              )
-            : Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  DirectionalController(),
-                  SizedBox(height: 100),
-                  RotationJoystick(
-                    rotationAngle: rotationAngle,
-                    onMove: onJoystickMove,
-                  ),
-                ],
-              );
-      },
+// AutoModeButton component
+class AutoModeButton extends StatelessWidget {
+  final bool isAutoMode;
+  final VoidCallback onPressed;
+
+  AutoModeButton({required this.isAutoMode, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      child: Text(isAutoMode ? 'Auto Mode OFF' : 'Auto Mode ON'),
     );
   }
 }
@@ -85,25 +141,19 @@ class _DirectionalControllerState extends State<DirectionalController> {
   Timer? _holdTimer;
 
   void onDirectionPressed(String direction) {
-    // Handle continuous direction logic here
     print('Direction: $direction');
   }
 
   void _startContinuousPress(String direction) {
-    // Trigger the direction action immediately
     onDirectionPressed(direction);
-    // Start a timer to repeat the action
     _holdTimer = Timer.periodic(Duration(milliseconds: 100), (_) {
       onDirectionPressed(direction);
     });
   }
 
   void _stopContinuousPress() {
-    // Cancel the timer when the button is released
-    if (_holdTimer != null) {
-      _holdTimer!.cancel();
-      _holdTimer = null;
-    }
+    _holdTimer?.cancel();
+    _holdTimer = null;
   }
 
   @override
@@ -165,9 +215,6 @@ class _DirectionalControllerState extends State<DirectionalController> {
   }
 }
 
-// TODO: 좌우에 따라서 이동 방향이 달라지도록 수정
-// TODO: Auto Mode Button 추가
-// Joystick-based rotation controller
 class RotationJoystick extends StatelessWidget {
   final double rotationAngle;
   final Function(Offset) onMove;
@@ -178,22 +225,14 @@ class RotationJoystick extends StatelessWidget {
   Widget build(BuildContext context) {
     return Joystick(
       includeInitialAnimation: false,
-      //base: JoystickSquareBase(
-      //  decoration: JoystickBaseDecoration(
-      //    color: Colors.orange,
-      //  ),
-      //  //arrowsDecoration: JoystickArrowsDecoration(
-      //  //  color: Colors.grey,
-      //  //  enableAnimation: false,
-      //  //),
-      //),
       base: Container(
         width: 200,
         height: 50,
         decoration: const BoxDecoration(
-            color: Colors.orange,
-            shape: BoxShape.rectangle,
-            borderRadius: BorderRadius.all(Radius.circular(20))),
+          color: Colors.orange,
+          shape: BoxShape.rectangle,
+          borderRadius: BorderRadius.all(Radius.circular(20)),
+        ),
       ),
       stick: JoystickStick(
         size: 40,
@@ -203,7 +242,7 @@ class RotationJoystick extends StatelessWidget {
         ),
       ),
       listener: (details) {
-        //onMove(details.offset); // Update rotation angle based on joystick movement
+        //onMove(details.offset);
       },
     );
   }
